@@ -1,8 +1,9 @@
 /**
  * @author Nadim Basalamah <dimbslmh@gmail.com>
- * @version: v1.1.0
- * https://github.com/dimbslmh/bootstrap-table/tree/master/src/extensions/multiple-sort/bootstrap-table-multiple-sort.js
+`` * @version: v1.2.0
+ * https://github.com/nlundquist/bootstrap-table/tree/master/src/extensions/multiple-sort/bootstrap-table-multiple-sort.js
  * Modification: ErwannNevou <https://github.com/ErwannNevou>
+ * Modification: Nils Lundquist <https://github.com/nlundquist>
  */
 
 (function($) {
@@ -146,18 +147,6 @@
                     }];
                 }
             }
-
-            if (that.options.sortPriority !== null && that.options.sortPriority.length > 0) {
-                if ($rows.length < that.options.sortPriority.length && typeof that.options.sortPriority === 'object') {
-                    for (var i = 0; i < that.options.sortPriority.length; i++) {
-                        that.addLevel(i, that.options.sortPriority[i]);
-                    }
-                }
-            } else {
-                that.addLevel(0);
-            }
-
-            that.setButtonStates();
         }
     };
 
@@ -224,7 +213,8 @@
     $.extend($.fn.bootstrapTable.defaults, $.fn.bootstrapTable.locales);
 
     var BootstrapTable = $.fn.bootstrapTable.Constructor,
-        _initToolbar = BootstrapTable.prototype.initToolbar;
+        _initToolbar = BootstrapTable.prototype.initToolbar,
+        _initHeader = BootstrapTable.prototype.initHeader;
 
     BootstrapTable.prototype.initToolbar = function() {
         this.showToolbar = true;
@@ -239,11 +229,16 @@
                 $multiSortBtn = this.$toolbar.find('div.multi-sort');
 
             if (!$multiSortBtn.length) {
-                $multiSortBtn = '  <button class="multi-sort btn btn-default' + (this.options.iconSize === undefined ? '' : ' btn-' + this.options.iconSize) + '" type="button" data-toggle="modal" data-target="' + sortModalId + '" title="' + this.options.formatMultipleSort() + '">';
-                $multiSortBtn += '     <i class="' + this.options.iconsPrefix + ' ' + this.options.icons.sort + '"></i>';
+                $multiSortBtn = '<button class="multi-sort btn btn-default' + (this.options.iconSize === undefined ? '' : ' btn-' + this.options.iconSize) + '" type="button" title="' + this.options.formatMultipleSort() + '">';
+                $multiSortBtn += '  <i class="' + this.options.iconsPrefix + ' ' + this.options.icons.sort + '"></i>';
                 $multiSortBtn += '</button>';
 
                 $btnGroup.append($multiSortBtn);
+
+                $($btnGroup).on('click', '.multi-sort', function() {
+                    that.redrawSortingTableBody();
+                    $('#sortModal_' + that.$el.attr('id')).modal('toggle');
+                });
 
                 showSortModal(that);
             }
@@ -280,6 +275,67 @@
                 }
             });
         }
+    };
+
+    BootstrapTable.prototype.initHeader = function() {
+        var that = this;
+
+        _initHeader.apply(this, Array.prototype.slice.apply(arguments));
+
+        // rewrite column header click behaviour
+        this.$container.off('click', '.th-inner').on('click', '.th-inner', function (event) {
+            var target = $(this),
+                ctrlOrMeta = event.metaKey || event.ctrlKey,
+                columnData = target.parent('th').data(),
+                sortRecords = that.options.sortPriority || []   ,
+                sortRecord = {
+                    sortName: columnData.field,
+                    sortOrder: columnData.order
+                },
+                existingSortRecord = null;
+
+            if (that.options.detailView) {
+                if (target.closest('.bootstrap-table')[0] !== that.$container[0])
+                    return false;
+            }
+
+            if (that.options.sortable && target.parent().data().sortable) {
+                for (var ri = 0; ri < sortRecords.length; ri++) {
+                    if (sortRecords[ri].sortName == columnData.field) {
+                        existingSortRecord = sortRecords[ri];
+                        break;
+                    }
+                }
+
+                if (!ctrlOrMeta && (!existingSortRecord || !sortRecords)) {
+                    that.options.sortPriority = [sortRecord];
+                } else {
+                    // if we've already sorted by this column reverse the direction of the existing sort record
+                    if (existingSortRecord) {
+                        existingSortRecord.sortOrder = existingSortRecord.sortOrder == 'asc' ? 'desc' : 'asc';
+                    } else {
+                        that.options.sortPriority.push(sortRecord);
+                    }
+                }
+                that.onMultipleSort();
+            }
+         });
+    };
+
+    BootstrapTable.prototype.redrawSortingTableBody = function() {
+        var that = this;
+
+        that.$sortModal.find('#multi-sort > tbody > tr').remove();
+
+        if (that.options.sortPriority !== null && that.options.sortPriority.length > 0) {
+            for (var i = 0; i < that.options.sortPriority.length; i++) {
+                that.addLevel(i, that.options.sortPriority[i]);
+            }
+        } else {
+            that.addLevel(0);
+        }
+
+        that.setButtonStates();
     };
 
     BootstrapTable.prototype.onMultipleSort = function() {
@@ -362,12 +418,22 @@
 
     BootstrapTable.prototype.assignSortableArrows = function() {
         var that = this,
-            headers = that.$header.find('th');
+            headers = that.$header.find('th'),
+            fixedHeaders = that.$fixedHeader.find('th');
 
         for (var i = 0; i < headers.length; i++) {
             for (var c = 0; c < that.options.sortPriority.length; c++) {
                 if ($(headers[i]).data('field') === that.options.sortPriority[c].sortName) {
-                    $(headers[i]).find('.sortable').removeClass('desc asc').addClass(that.options.sortPriority[c].sortOrder);
+                    var mainHeader = $(headers[i]),
+                        matchedHeaders = mainHeader;
+
+                    // if there are fixed columns include fixed column header
+                    if (fixedHeaders.length > 0) {
+                        var fixedHeader = fixedHeaders.find('.th-inner:contains('+mainHeader.text()+')').parent();
+                        matchedHeaders = matchedHeaders.add(fixedHeader);
+                    }
+
+                    matchedHeaders.find('.sortable').removeClass('desc asc').addClass(that.options.sortPriority[c].sortOrder);
                 }
             }
         }
