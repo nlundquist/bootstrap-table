@@ -214,7 +214,8 @@
 
     var BootstrapTable = $.fn.bootstrapTable.Constructor,
         _initToolbar = BootstrapTable.prototype.initToolbar,
-        _initHeader = BootstrapTable.prototype.initHeader;
+        _initHeader = BootstrapTable.prototype.initHeader,
+        _init = BootstrapTable.prototype.init;
 
     BootstrapTable.prototype.initToolbar = function() {
         this.showToolbar = true;
@@ -320,6 +321,15 @@
                 that.onMultipleSort();
             }
          });
+    };
+
+    BootstrapTable.prototype.init = function() {
+        _init.apply(this, Array.prototype.slice.apply(arguments));
+
+        // init sorting sorting provided
+        if (this.options.sortPriority !== null && typeof this.options.sortPriority === 'object') {
+            this.onMultipleSort();
+        }
     };
 
     BootstrapTable.prototype.redrawSortingTableBody = function() {
